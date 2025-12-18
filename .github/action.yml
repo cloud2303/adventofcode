@@ -1,0 +1,67 @@
+name: build-and-cache
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  packages: write # 必须：允许上传编译好的 NuGet 包
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      # 核心：设置二进制来源为 GitHub Packages
+      VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@v4
+
+      # 1. 关键补丁：克隆 vcpkg 源码 (你的脚本之前漏了这步)
+      - name: Checkout vcpkg
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/vcpkg
+          path: vcpkg
+
+      # 2. 2025 环境补丁：安装 Mono (Ubuntu 24.04+ 不再预装)
+      - name: Install mono
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mono-complete
+
+      - name: Bootstrap vcpkg
+        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh
+
+      # 3. 授权 NuGet：让 vcpkg 有权限读写 GitHub Packages
+      - name: NuGet Authentication
+        shell: bash
+        run: |
+          # 获取 vcpkg 自动下载的 nuget.exe 路径
+          NUGET_EXE=$(${{ env.VCPKG_ROOT }}/vcpkg fetch nuget | tail -n 1)
+          
+          mono $NUGET_EXE sources add \
+            -Source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            -StorePasswordInClearText \
+            -Name "GitHubPackages" \
+            -UserName "${{ github.repository_owner }}" \
+            -Password "${{ secrets.GITHUB_TOKEN }}"
+
+          mono $NUGET_EXE setapikey "${{ secrets.GITHUB_TOKEN }}" \
+            -Source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+          -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        # 在这一步，vcpkg 会自动：
+        # 1. 检查 GitHub Packages 是否有缓存
+        # 2. 没找到则编译，编译完自动推送上传
+        run: cmake --build build --config Release

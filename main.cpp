@@ -3,10 +3,13 @@
 //
 
 #include <charconv>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <vector>
 #include <ranges>
+#include <string>
+#include <fmt/format.h>
 
 
 int main()
@@ -54,7 +57,7 @@ int main()
     }
 
     auto t2 = std::chrono::high_resolution_clock::now();
-    std::println("{}", cnt);
+    fmt::print("{}\n", cnt);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1);
     std::cout << "cost = " << ms.count() << " ms\n";
 }
