@@ -21,14 +21,12 @@ jobs:
       - name: Checkout Project
         uses: actions/checkout@v4
 
-      # 1. 关键补丁：克隆 vcpkg 源码 (你的脚本之前漏了这步)
       - name: Checkout vcpkg
         uses: actions/checkout@v4
         with:
           repository: microsoft/vcpkg
           path: vcpkg
 
-      # 2. 2025 环境补丁：安装 Mono (Ubuntu 24.04+ 不再预装)
       - name: Install mono
         run: |
           sudo apt-get update
@@ -37,7 +35,6 @@ jobs:
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh
 
-      # 3. 授权 NuGet：让 vcpkg 有权限读写 GitHub Packages
       - name: Add NuGet sources (Use PAT)
         shell: bash
         env:
@@ -45,10 +42,8 @@ jobs:
           USERNAME: ${{ github.repository_owner }}
           FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
         run: |
-          # 获取 nuget.exe 路径
           NUGET_EXE=$(${{ env.VCPKG_EXE }} fetch nuget | tail -n 1)
-          
-          # 使用自定义的 VCPKG_PAT_TOKEN 进行认证
+        
           mono $NUGET_EXE sources add \
             -Source "${{ env.FEED_URL }}" \
             -StorePasswordInClearText \
@@ -65,7 +60,4 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        # 在这一步，vcpkg 会自动：
-        # 1. 检查 GitHub Packages 是否有缓存
-        # 2. 没找到则编译，编译完自动推送上传
         run: cmake --build build --config Release

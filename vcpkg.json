@@ -1,5 +1,9 @@
 {
   "dependencies": [
-    "fmt"
+    "fmt",
+    "grpc",
+    "nlohmann-json",
+    "cpp-httplib"
   ]
+
 }
