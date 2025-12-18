@@ -38,22 +38,26 @@ jobs:
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh
 
       # 3. 授权 NuGet：让 vcpkg 有权限读写 GitHub Packages
-      - name: NuGet Authentication
+      - name: Add NuGet sources (Use PAT)
         shell: bash
+        env:
+          VCPKG_EXE: ${{ env.VCPKG_ROOT }}/vcpkg
+          USERNAME: ${{ github.repository_owner }}
+          FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
         run: |
-          # 获取 vcpkg 自动下载的 nuget.exe 路径
-          NUGET_EXE=$(${{ env.VCPKG_ROOT }}/vcpkg fetch nuget | tail -n 1)
+          # 获取 nuget.exe 路径
+          NUGET_EXE=$(${{ env.VCPKG_EXE }} fetch nuget | tail -n 1)
           
+          # 使用自定义的 VCPKG_PAT_TOKEN 进行认证
           mono $NUGET_EXE sources add \
-            -Source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            -Source "${{ env.FEED_URL }}" \
             -StorePasswordInClearText \
             -Name "GitHubPackages" \
-            -UserName "${{ github.repository_owner }}" \
-            -Password "${{ secrets.GITHUB_TOKEN }}"
-
-          mono $NUGET_EXE setapikey "${{ secrets.GITHUB_TOKEN }}" \
-            -Source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-
+            -UserName "${{ env.USERNAME }}" \
+            -Password "${{ secrets.VCPKG_PAT_TOKEN }}"
+          
+          mono $NUGET_EXE setapikey "${{ secrets.VCPKG_PAT_TOKEN }}" \
+            -Source "${{ env.FEED_URL }}"
       - name: Configure CMake
         run: |
           cmake -B build \
