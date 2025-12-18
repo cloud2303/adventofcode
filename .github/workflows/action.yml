@@ -18,6 +18,8 @@ jobs:
             triplet: x64-linux
           - os: windows-latest
             triplet: x64-windows
+          - os: macos-15
+            triplet: x64-osx
 
     runs-on: ${{ matrix.os }}
 
