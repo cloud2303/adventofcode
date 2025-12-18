@@ -88,6 +88,7 @@ jobs:
           & $nugetExe setapikey "$env:TOKEN" -Source "$env:FEED_URL"
 
       - name: Configure CMake
+        shell: bash
         run: |
           cmake -B build \
             -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
