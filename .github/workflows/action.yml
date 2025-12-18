@@ -26,7 +26,7 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
       USERNAME: ${{ github.repository_owner }}
       FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-      TOKEN: ${{ secrets.VCPKG_PAT_TOKEN }} # 或者后面你改用 GITHUB_TOKEN
+      TOKEN: ${{ secrets.GITHUB_TOKEN }} # 或者后面你改用 GITHUB_TOKEN
       VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
 
     steps:
