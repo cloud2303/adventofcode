@@ -6,16 +6,28 @@ on:
 
 permissions:
   contents: read
-  packages: write # 必须：允许上传编译好的 NuGet 包
+  packages: write
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            triplet: x64-linux
+          - os: windows-latest
+            triplet: x64-windows
+
+    runs-on: ${{ matrix.os }}
 
     env:
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-      # 核心：设置二进制来源为 GitHub Packages
       VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
+      USERNAME: ${{ github.repository_owner }}
+      FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+      TOKEN: ${{ secrets.VCPKG_PAT_TOKEN }} # 或者后面你改用 GITHUB_TOKEN
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
 
     steps:
       - name: Checkout Project
@@ -27,37 +39,59 @@ jobs:
           repository: microsoft/vcpkg
           path: vcpkg
 
-      - name: Install mono
+      - name: Install mono (Linux only)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y mono-complete
 
-      - name: Bootstrap vcpkg
+      - name: Bootstrap vcpkg (Linux/macOS)
+        if: runner.os != 'Windows'
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh
 
-      - name: Add NuGet sources (Use PAT)
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: "%VCPKG_ROOT%\\bootstrap-vcpkg.bat"
+
+      - name: Add NuGet source (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         env:
           VCPKG_EXE: ${{ env.VCPKG_ROOT }}/vcpkg
-          USERNAME: ${{ github.repository_owner }}
-          FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
         run: |
-          NUGET_EXE=$(${{ env.VCPKG_EXE }} fetch nuget | tail -n 1)
-          
-          mono $NUGET_EXE sources add \
-            -Source "${{ env.FEED_URL }}" \
+          NUGET_EXE=$($VCPKG_EXE fetch nuget | tail -n 1)
+          mono "$NUGET_EXE" sources remove -Name "GitHubPackages" || true
+          mono "$NUGET_EXE" sources add \
+            -Source "${FEED_URL}" \
             -StorePasswordInClearText \
             -Name "GitHubPackages" \
-            -UserName "${{ env.USERNAME }}" \
-            -Password "${{ secrets.VCPKG_PAT_TOKEN }}"
-          
-          mono $NUGET_EXE setapikey "${{ secrets.VCPKG_PAT_TOKEN }}" \
-            -Source "${{ env.FEED_URL }}"
+            -UserName "${USERNAME}" \
+            -Password "${TOKEN}"
+          mono "$NUGET_EXE" setapikey "${TOKEN}" -Source "${FEED_URL}"
+
+      - name: Add NuGet source (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          VCPKG_EXE: ${{ env.VCPKG_ROOT }}\vcpkg.exe
+        run: |
+          $nugetExe = (& $env:VCPKG_EXE fetch nuget | Select-Object -Last 1).Trim()
+          & $nugetExe sources remove -Name "GitHubPackages" 2>$null
+          & $nugetExe sources add `
+            -Source "$env:FEED_URL" `
+            -StorePasswordInClearText `
+            -Name "GitHubPackages" `
+            -UserName "$env:USERNAME" `
+            -Password "$env:TOKEN"
+          & $nugetExe setapikey "$env:TOKEN" -Source "$env:FEED_URL"
+
       - name: Configure CMake
         run: |
           cmake -B build \
-          -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
-          -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
         run: cmake --build build --config Release
