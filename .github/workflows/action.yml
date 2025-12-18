@@ -3,6 +3,7 @@ name: build-and-cache
 on:
   push:
     branches: [ main ]
+  workflow_dispatch: # 允许手动触发
 
 permissions:
   contents: read
@@ -18,18 +19,19 @@ jobs:
             triplet: x64-linux
           - os: windows-latest
             triplet: x64-windows
-          - os: macos-15
+          - os: macos-13
             triplet: x64-osx
+
 
     runs-on: ${{ matrix.os }}
 
     env:
       VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
       VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
       USERNAME: ${{ github.repository_owner }}
       FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-      TOKEN: ${{ secrets.GITHUB_TOKEN }} # 或者后面你改用 GITHUB_TOKEN
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout Project
@@ -42,13 +44,16 @@ jobs:
           path: vcpkg
           ref: 912567f6fdd1883e07b070dcc0aa67cec072042a
 
-      - name: Install mono (Linux only)
-        if: runner.os == 'Linux'
+      - name: Install Mono (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mono-complete
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y mono-complete
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            brew install mono
+          fi
 
-      - name: Bootstrap vcpkg (Linux/macOS)
+      - name: Bootstrap vcpkg (Unix)
         if: runner.os != 'Windows'
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh
 
@@ -57,13 +62,15 @@ jobs:
         shell: cmd
         run: "%VCPKG_ROOT%\\bootstrap-vcpkg.bat"
 
-      - name: Add NuGet source (Linux)
-        if: runner.os == 'Linux'
+      - name: Configure NuGet Source (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           VCPKG_EXE: ${{ env.VCPKG_ROOT }}/vcpkg
         run: |
+          # 获取 vcpkg 自带的 nuget.exe 路径
           NUGET_EXE=$($VCPKG_EXE fetch nuget | tail -n 1)
+          # 在 Unix 上使用 mono 运行 nuget.exe 并配置认证
           mono "$NUGET_EXE" sources remove -Name "GitHubPackages" || true
           mono "$NUGET_EXE" sources add \
             -Source "${FEED_URL}" \
@@ -73,7 +80,7 @@ jobs:
             -Password "${TOKEN}"
           mono "$NUGET_EXE" setapikey "${TOKEN}" -Source "${FEED_URL}"
 
-      - name: Add NuGet source (Windows)
+      - name: Configure NuGet Source (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         env:
