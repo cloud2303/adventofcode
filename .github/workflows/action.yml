@@ -43,7 +43,7 @@ jobs:
           FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
         run: |
           NUGET_EXE=$(${{ env.VCPKG_EXE }} fetch nuget | tail -n 1)
-        
+          
           mono $NUGET_EXE sources add \
             -Source "${{ env.FEED_URL }}" \
             -StorePasswordInClearText \
