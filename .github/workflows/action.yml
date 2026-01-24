@@ -42,7 +42,7 @@ jobs:
         with:
           repository: microsoft/vcpkg
           path: vcpkg
-          ref: 912567f6fdd1883e07b070dcc0aa67cec072042a
+          ref: 30d7c1678dd97d3501ff5e7a786b014ded607860
 
       - name: Install Mono (Linux/macOS)
         if: runner.os != 'Windows'

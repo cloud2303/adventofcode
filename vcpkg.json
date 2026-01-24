@@ -5,5 +5,5 @@
     "nlohmann-json",
     "cpp-httplib"
   ],
-  "builtin-baseline": "912567f6fdd1883e07b070dcc0aa67cec072042a"
+  "builtin-baseline": "30d7c1678dd97d3501ff5e7a786b014ded607860"
 }
