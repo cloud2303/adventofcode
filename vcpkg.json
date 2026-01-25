@@ -3,7 +3,8 @@
     "fmt",
     "grpc",
     "nlohmann-json",
-    "cpp-httplib"
+    "cpp-httplib",
+    "crow"
   ],
   "builtin-baseline": "30d7c1678dd97d3501ff5e7a786b014ded607860"
 }
