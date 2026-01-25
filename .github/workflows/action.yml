@@ -2,23 +2,12 @@ name: build-and-cache
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
-
-env:
-  # --- 只需在这里配置 ---
-  PROJECT_NAME: proxy_node
-  BINARY_TARGETS: "proxy_node"
-  # --------------------
-  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-  VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
-  USERNAME: ${{ github.repository_owner }}
-  FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-  TOKEN: ${{ secrets.CI_TOKEN }}
 
 jobs:
   build:
@@ -28,18 +17,21 @@ jobs:
         include:
           - os: ubuntu-latest
             triplet: x64-linux
-            preset: release-ubuntu
-            build_dir: release-ubuntu
-#          - os: windows-latest
-#            triplet: x64-windows
-#            preset: release-win
-#            build_dir: release-win
-    #          - os: macos-latest
-    #            triplet: arm64-osx
-    #            preset: release-osx
-    #            build_dir: release-osx
+          - os: windows-latest
+            triplet: x64-windows
+          - os: macos-15
+            triplet: arm64-osx
+
 
     runs-on: ${{ matrix.os }}
+
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
+      USERNAME: ${{ github.repository_owner }}
+      FEED_URL: "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+      TOKEN: ${{ secrets.CI_TOKEN }}
 
     steps:
       - name: Checkout Project
@@ -51,7 +43,6 @@ jobs:
           repository: microsoft/vcpkg
           path: vcpkg
           ref: 30d7c1678dd97d3501ff5e7a786b014ded607860
-
       - name: Install GCC 14 (Ubuntu only)
         if: runner.os == 'Linux'
         run: |
@@ -59,6 +50,7 @@ jobs:
           sudo apt-get install -y gcc-14 g++-14 ninja-build
           sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
           sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+
       - name: Install Mono (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
@@ -76,15 +68,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: "%VCPKG_ROOT%\\bootstrap-vcpkg.bat"
-
-      - name: Setup MSVC (Windows)
-        if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Ninja (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: choco install ninja --no-progress
 
       - name: Configure NuGet Source (Unix)
         if: runner.os != 'Windows'
@@ -121,40 +104,12 @@ jobs:
           & $nugetExe setapikey "$env:TOKEN" -Source "$env:FEED_URL"
 
       - name: Configure CMake
-        run: cmake --preset ${{ matrix.preset }} -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
-
-      - name: Build
-        run: cmake --build --preset ${{ matrix.preset }}
-
-      - name: Package Artifacts
         shell: bash
         run: |
-          mkdir -p package_output
-          for target in ${{ env.BINARY_TARGETS }}; do
-            FILE_PATH="${{ matrix.build_dir }}/$target"
-          
-            # Windows 自动补全 .exe
-            if [ "$RUNNER_OS" == "Windows" ] && [[ ! "$target" == *"."* ]]; then
-              FILE_PATH="${FILE_PATH}.exe"
-            fi
-          
-            if [ -f "$FILE_PATH" ]; then
-              cp "$FILE_PATH" package_output/
-              echo "Copied: $FILE_PATH"
-            else
-              echo "Error: $FILE_PATH not found!" && exit 1
-            fi
-          done
+          cmake -B build \
+            -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake" \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DCMAKE_BUILD_TYPE=Release
 
-          # 根据平台压缩
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            7z a "${{ env.PROJECT_NAME }}-${{ matrix.os }}.zip" ./package_output/*
-          else
-            tar -czf "${{ env.PROJECT_NAME }}-${{ matrix.os }}.tar.gz" -C package_output .
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.PROJECT_NAME }}-${{ matrix.os }}
-          path: ${{ env.PROJECT_NAME }}-${{ matrix.os }}.*
+      - name: Build
+        run: cmake --build build --config Releas
