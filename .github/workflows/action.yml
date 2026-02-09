@@ -42,7 +42,7 @@ jobs:
         with:
           repository: microsoft/vcpkg
           path: vcpkg
-          ref: 30d7c1678dd97d3501ff5e7a786b014ded607860
+          ref: aa2d37682e3318d93aef87efa7b0e88e81cd3d59
       - name: Install GCC 14 (Ubuntu only)
         if: runner.os == 'Linux'
         run: |
